@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>云隐寺 · 调试版</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0b0e14;font-family:"PingFang SC","Microsoft YaHei",sans-serif;user-select:none;touch-action:none;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+  .hud{position:fixed;top:calc(8px + env(safe-area-inset-top));left:8px;right:8px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;}
+  .hud .box{background:rgba(255,246,230,.9);border:3px solid #c0392b;border-radius:12px;padding:5px 12px;color:#c0392b;font-weight:800;font-size:13px;box-shadow:0 3px 10px rgba(0,0,0,.25);}
+  .hud .box .num{font-size:18px;}
+  .hud .title{border-color:#d99a3a;color:#a86b1c;text-align:right;font-size:12px;}
+  .hud .title small{font-size:9px;color:#b98a3e;display:block;}
+  .minimap{position:fixed;right:8px;top:70px;width:120px;height:120px;background:rgba(255,246,230,.45);border:3px solid rgba(192,57,43,.6);border-radius:10px;z-index:12;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.2);transition:all .25s;opacity:0.75;}
+  .minimap.hide{width:44px;height:44px;border-radius:50%;opacity:1;}
+  .minimap canvas{width:100%;height:100%;display:block;}
+  .minimap.hide canvas{display:none;}
+  .minimap .label{position:absolute;left:0;right:0;bottom:1px;text-align:center;font-size:9px;color:#7a4a2b;font-weight:700;background:rgba(255,246,230,.7);}
+  .minimap.hide .label{display:none;}
+  .minimap .toggle{position:absolute;left:0;top:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;font-size:22px;color:#c0392b;cursor:pointer;}
+  .minimap.hide .toggle{display:flex;}
+  .joystick{position:fixed;left:20px;bottom:calc(24px + env(safe-area-inset-bottom));width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);z-index:20;touch-action:none;}
+  .joystick .stick{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(255,246,230,.92);box-shadow:0 3px 10px rgba(0,0,0,.3);transition:transform .04s;}
+  
+  /* 修改了这里：抬高位置，增加最高层级 */
+  .interact{position:fixed;right:15px;bottom:calc(160px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;z-index:9999 !important;align-items:flex-end;pointer-events:auto !important;}
+  
+  .interact button{min-width:84px;height:70px;padding:0 10px;border-radius:16px;border:none;font-size:12px;font-weight:800;color:#fff;background:#c0392b;box-shadow:0 5px 0 #8f2a20,0 6px 16px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;opacity:0;transform:scale(.6);pointer-events:none;transition:all .15s;}
+  .interact button .ico{font-size:22px;}
+  .interact button.show{opacity:1;transform:scale(1);pointer-events:auto;}
+  .interact button:active{transform:translateY(4px) scale(.98);box-shadow:0 1px 0 #8f2a20;}
+  .interact button.gold{background:#d99a3a;box-shadow:0 5px 0 #a86b1c,0 6px 16px rgba(0,0,0,.3);}
+  .interact button.green{background:#5a9e4a;box-shadow:0 5px 0 #3f7533,0 6px 16px rgba(0,0,0,.3);}
+  .interact button.always{opacity:1;transform:scale(1);pointer-events:auto;}
+  .toast{position:fixed;left:50%;top:20%;transform:translateX(-50%) translateY(-10px);background:rgba(192,57,43,.94);color:#fff;padding:8px 18px;border-radius:18px;font-size:13px;font-weight:700;z-index:30;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap;max-width:90vw;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .float{position:fixed;font-size:19px;font-weight:900;color:#ffd76a;text-shadow:0 2px 6px rgba(0,0,0,.7);pointer-events:none;z-index:25;animation:floatUp 1s ease-out forwards;}
+  @keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(.8);}30%{transform:translateY(-24px) scale(1.2);}100%{opacity:0;transform:translateY(-90px) scale(1);}}
+  .loading{position:fixed;inset:0;background:#0b0e14;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ffd76a;gap:14px;z-index:100;transition:opacity .6s;}
+  .loading.hide{opacity:0;pointer-events:none;}
+  .loading .lotus{font-size:46px;animation:spin 2s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading p{font-size:14px;letter-spacing:2px;}
+  .loading .bar{width:160px;height:6px;background:#333;border-radius:3px;overflow:hidden;}
+  .loading .bar i{display:block;height:100%;width:0;background:#ffd76a;transition:width .3s;}
+  .lookhint{position:fixed;right:8px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.5);font-size:10px;writing-mode:vertical-rl;letter-spacing:2px;z-index:5;pointer-events:none;}
+  .modal-mask{position:fixed;inset:0;background:rgba(40,20,8,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal-mask.show{display:flex;}
+  .modal{background:#fff6e6;border:4px solid #c0392b;border-radius:20px;padding:16px;width:100%;max-width:360px;max-height:82vh;overflow-y:auto;text-align:center;box-shadow:0 12px 30px rgba(0,0,0,.35);animation:pop .22s ease-out;}
+  @keyframes pop{from{transform:scale(.85);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal h3{color:#c0392b;font-size:17px;margin-bottom:8px;}
+  .modal p{color:#7a4a2b;font-size:13px;line-height:1.7;margin-bottom:8px;}
+  .modal .qianwen{font-size:15px;font-weight:800;color:#a86b1c;margin:8px 0;}
+  .modal .jieda{background:#fdeccd;border-radius:12px;padding:10px;color:#7a4a2b;font-size:12px;line-height:1.7;text-align:left;margin-top:6px;}
+  .modal textarea,.modal input[type=text]{width:100%;border:2px solid #d99a3a;border-radius:10px;padding:8px;font-size:13px;font-family:inherit;color:#7a4a2b;outline:none;resize:none;}
+  .modal textarea{height:60px;}
+  .modal .btns{display:flex;gap:8px;margin-top:10px;}
+  .modal .btns button{flex:1;border:none;border-radius:11px;padding:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:#c0392b;color:#fff;box-shadow:0 4px 0 #8f2a20;}
+  .btn-primary:active{transform:translateY(3px);box-shadow:0 1px 0 #8f2a20;}
+  .btn-ghost{background:#e8d4b0;color:#7a4a2b;box-shadow:0 4px 0 #c8ae82;}
+  .btn-ghost:active{transform:translateY(3px);box-shadow:0 1px 0 #c8ae82;}
+  .divine-menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0;}
+  .divine-menu button{background:#fdeccd;border:2px solid #d99a3a;border-radius:12px;padding:14px 6px;font-size:13px;font-weight:800;color:#7a4a2b;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .divine-menu button .ic{font-size:24px;}
+  .divine-menu button:active{background:#f2d9a8;}
+  .quiz-q{font-size:14px;font-weight:700;color:#7a4a2b;margin:10px 0;line-height:1.6;text-align:left;}
+  .quiz-opts{display:flex;flex-direction:column;gap:6px;}
+  .quiz-opts button{background:#fdeccd;border:2px solid #d99a3a;border-radius:10px;padding:10px;font-size:13px;font-weight:700;color:#7a4a2b;cursor:pointer;font-family:inherit;text-align:left;}
+  .quiz-opts button:active{background:#f2d9a8;}
+  .quiz-progress{font-size:11px;color:#b98a3e;margin-bottom:6px;}
+  .task-card{background:#fdeccd;border-radius:12px;padding:12px;margin:8px 0;text-align:left;}
+  .task-card .tname{font-size:14px;font-weight:800;color:#a86b1c;margin-bottom:6px;}
+  .task-card .tdesc{font-size:12px;color:#7a4a2b;line-height:1.5;}
+  .task-bar{height:10px;background:#e8d4b0;border-radius:5px;overflow:hidden;margin-top:8px;}
+  .task-bar i{display:block;height:100%;width:0;background:#5a9e4a;transition:width .3s;}
+  .chat-log{height:160px;overflow-y:auto;background:#fdeccd;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;margin-bottom:8px;text-align:left;}
+  .msg{max-width:82%;padding:7px 10px;border-radius:12px;font-size:12px;line-height:1.5;}
+  .msg.bot{align-self:flex-start;background:#fff;color:#5a3218;border-bottom-left-radius:3px;}
+  .msg.me{align-self:flex-end;background:#c0392b;color:#fff;border-bottom-right-radius:3px;}
+  .chat-input-row{display:flex;gap:6px;}
+  .chat-input-row input{flex:1;border:2px solid #d99a3a;border-radius:9px;padding:8px;font-size:13px;font-family:inherit;color:#7a4a2b;outline:none;}
+  .chat-input-row button{border:none;background:#c0392b;color:#fff;border-radius:9px;padding:0 14px;font-weight:800;cursor:pointer;}
+  .copy-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin:10px 0;}
+  .copy-grid button{background:#fdeccd;border:2px solid #d99a3a;border-radius:6px;padding:6px;font-size:14px;font-weight:700;color:#7a4a2b;cursor:pointer;font-family:inherit;}
+  .copy-grid button:disabled{background:#c0392b;color:#fff;}
+  .rank-list{max-height:280px;overflow-y:auto;margin:8px 0;}
+  .rank-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:#fdeccd;margin-bottom:5px;font-size:13px;text-align:left;}
+  .rank-item.me{background:#ffe08a;border:2px solid #d99a3a;font-weight:800;}
+  .rank-item .rk{width:26px;font-weight:900;color:#c0392b;}
+  .rank-item .nm{flex:1;color:#5a3218;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rank-item .mt{color:#a86b1c;font-weight:800;}
+  .debug{position:fixed;left:8px;top:100px;background:rgba(0,0,0,.8);color:#0f0;font-size:11px;padding:6px 8px;border-radius:8px;z-index:99;font-family:monospace;line-height:1.5;pointer-events:none;max-width:70vw;}
+</style>
+</head>
+
+<body>
+<div id="app"></div>
+<div class="hud">
+  <div class="box">🪷 功德 <span class="num" id="meritNum">0</span></div>
+  <div class="box title"><span id="titleName">小沙弥</span><small>修行等级</small></div>
+</div>
+<div class="minimap" id="minimap"><canvas id="mapCanvas"></canvas><div class="label" id="mapLabel">山门</div><div class="toggle" id="mapToggle">🗺️</div></div>
+<div class="lookhint">右侧滑动转视角</div>
+<div class="debug" id="debugPanel">加载中…</div>
+<div class="joystick" id="joystick"><div class="stick" id="stick"></div></div>
+<div class="interact">
+  <button id="btnRank" class="green always"><span class="ico">🏆</span>排行榜</button>
+  <button id="btnMuyu" class="gold"><span class="ico">🪵</span>敲木鱼</button>
+  <button id="btnBow"><span class="ico">🙏</span>跪拜</button>
+  <button id="btnIncense"><span class="ico">🕯️</span>上香</button>
+  <button id="btnNPC" class="green"><span class="ico">💬</span>交谈</button>
+  <button id="btnWish" class="gold"><span class="ico">🌳</span>许愿</button>
+  <button id="btnRelease" class="green"><span class="ico">🐟</span>放生</button>
+  <button id="btnLight" class="gold"><span class="ico">🏮</span>供灯</button>
+  <button id="btnCopy" class="green"><span class="ico">📜</span>抄经</button>
+  <button id="btnDivine" class="gold"><span class="ico">🔮</span>问卜</button>
+</div>
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading"><div class="lotus">🪷</div><p>正在推演天机…</p><div class="bar"><i id="loadBar"></i></div></div>
+<div class="modal-mask" id="mask"><div class="modal" id="modalBox"></div></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ================= 基础 ================= */
+const app=document.getElementById('app');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xffe6bf);
+scene.fog=new THREE.Fog(0xffe0b0, 30, 60);
+const camera=new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 200);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xfff4e0,0x88aa66,0.9));
+const sun=new THREE.DirectionalLight(0xfff0d0,1.3);
+sun.position.set(14,22,12); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30,far:70});
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff,0.3));
+
+/* ================= 工具 ================= */
+const mat=(c,o={})=>new THREE.MeshStandardMaterial({color:c,flatShading:false,roughness:0.8,metalness:0.05,...o});
+const RED=0xc0392b,GOLD=0xe8b04a,WOOD=0xa8743e,CREAM=0xf6e7c8,GREEN=0x7fb069,DARK=0x5a3218,STONE=0xd8c6a0,SKIN=0xf7d27a,WALL=0xe8c87a;
+function box(w,h,d,c,x,y,z,p){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;(p||scene).add(m);return m;}
+function cyl(rt,rb,h,s,c,x,y,z,p){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;(p||scene).add(m);return m;}
+function sph(r,s,c,x,y,z,p){const m=new THREE.Mesh(new THREE.SphereGeometry(r,s,Math.max(10,s)),mat(c));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;(p||scene).add(m);return m;}
+function roof(w,h,d,c,x,y,z,p){const g=new THREE.Mesh(new THREE.ConeGeometry(1,1,4),mat(c));g.scale.set(w,h,d);g.position.set(x,y,z);g.rotation.y=Math.PI/4;g.castShadow=true;(p||scene).add(g);return g;}
+function plaque(text,w,c,x,y,z,p){
+  const cv=document.createElement('canvas');cv.width=512;cv.height=128;
+  const cc=cv.getContext('2d');cc.fillStyle=c||'#3a2210';cc.fillRect(0,0,512,128);
+  cc.strokeStyle='#e8b04a';cc.lineWidth=8;cc.strokeRect(6,6,500,116);
+  cc.fillStyle='#f2c96b';cc.font='bold 76px serif';cc.textAlign='center';cc.textBaseline='middle';
+  cc.fillText(text,256,68);
+  const tex=new THREE.CanvasTexture(cv);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,w/4,0.12),new THREE.MeshStandardMaterial({map:tex,roughness:0.8}));
+  m.position.set(x,y,z);(p||scene).add(m);return m;
+}
+
+/* ================= 场景 ================= */
+const ground=new THREE.Mesh(new THREE.CircleGeometry(40,64),mat(0x9cc286,{roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+function wallSeg(x1,z1,x2,z2){
+  const dx=x2-x1,dz=z2-z1,len=Math.hypot(dx,dz);
+  const g=new THREE.Group();g.position.set((x1+x2)/2,0,(z1+z2)/2);g.rotation.y=Math.atan2(dx,dz);scene.add(g);
+  box(0.5,2.2,len,WALL,0,1.1,0,g);
+  box(0.9,0.3,len+0.3,0x6a4a2a,0,2.35,0,g);
+}
+wallSeg(-26,32,-5,32); wallSeg(5,32,26,32);
+wallSeg(-26,32,-26,-30); wallSeg(26,32,26,-30);
+wallSeg(-26,-30,26,-30);
+const gate=new THREE.Group();gate.position.set(0,0,32);scene.add(gate);
+for(const sx of [-1,1]){cyl(0.4,0.45,4.5,10,RED,sx*3,2.25,0,gate);box(0.9,0.5,0.9,STONE,sx*3,4.6,0,gate);}
+box(7.6,0.5,0.9,RED,0,4.9,0,gate);
+roof(5,1.4,2.2,RED,0,5.8,0,gate);
+plaque('云隐寺',3,'#3a2210',0,4.3,0.55,gate);
+for(let i=0;i<24;i++){box(2.8,0.06,1.2,STONE,0,0.03,30-i*1.3);}
+
+/* ================= 可透明建筑 ================= */
+const buildings=[];
+function houseWithDoor(w,d,h,wallColor,doorW,doorH,x,z,name,roofColor){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  box(w+0.6,0.4,d+0.6,STONE,0,0.2,0,g);
+  const halfW=w/2, halfD=d/2, sideW=(w-doorW)/2;
+  const walls=[];
+  walls.push(box(w,h,0.3,wallColor,0,0.4+h/2,-halfD,g));
+  walls.push(box(0.3,h,d,wallColor,-halfW,0.4+h/2,0,g));
+  walls.push(box(0.3,h,d,wallColor,halfW,0.4+h/2,0,g));
+  walls.push(box(sideW,h,0.3,wallColor,-(doorW/2+sideW/2),0.4+h/2,halfD,g));
+  walls.push(box(sideW,h,0.3,wallColor,doorW/2+sideW/2,0.4+h/2,halfD,g));
+  walls.push(box(doorW,h-doorH,0.3,wallColor,0,0.4+doorH+(h-doorH)/2,halfD,g));
+  box(doorW+0.3,0.25,0.35,0x6a3a1a,0,0.4+doorH,halfD,g);
+  box(0.25,doorH+0.25,0.35,0x6a3a1a,-doorW/2,0.4+doorH/2,halfD,g);
+  box(0.25,doorH+0.25,0.35,0x6a3a1a,doorW/2,0.4+doorH/2,halfD,g);
+  box(doorW+0.2,0.12,0.5,0x8a5a2a,0,0.46,halfD,g);
+  box(doorW/2-0.05,doorH-0.1,0.08,0x9a4a2a,-(doorW/2-0.15),0.4+doorH/2,halfD-0.15,g).rotation.y=Math.PI/2;
+  box(doorW/2-0.05,doorH-0.1,0.08,0x9a4a2a,(doorW/2-0.15),0.4+doorH/2,halfD-0.15,g).rotation.y=-Math.PI/2;
+  const r1=roof(w+2,2,d+2,roofColor||RED,0,0.4+h+0.9,0,g);
+  const r2=roof(w*0.7,1.6,d*0.7,roofColor||RED,0,0.4+h+2,0,g);
+  sph(0.4,10,GOLD,0,0.4+h+2.7,0,g);
+  plaque(name,Math.min(3.5,doorW+0.6),'#3a2210',0,0.4+h-0.5,halfD+0.2,g);
+  buildings.push({group:g,walls,roofs:[r1,r2],cx:x,cz:z,rx:w/2+1.5,rz:d/2+1.5,transparent:false});
+  return g;
+}
+
+/* ================= 大雄宝殿 ================= */
+const hall=houseWithDoor(16,12,5,CREAM,4.5,3.8,0,-2,'大雄宝殿',RED);
+const buddha=new THREE.Group();buddha.position.set(0,0.5,-3.5);hall.add(buddha);
+sph(1.3,18,GOLD,0,0.9,0,buddha);
+sph(0.75,20,SKIN,0,2.4,0,buddha);
+sph(0.3,10,DARK,0,2.95,0,buddha);
+for(const x of [-0.28,0.28])sph(0.09,8,DARK,x,2.45,0.65,buddha);
+const smile=new THREE.Mesh(new THREE.TorusGeometry(0.18,0.03,6,14,Math.PI),mat(DARK));
+smile.position.set(0,2.2,0.68);smile.rotation.z=Math.PI;buddha.add(smile);
+const halo=new THREE.Mesh(new THREE.TorusGeometry(1.1,0.07,8,40),new THREE.MeshStandardMaterial({color:0xffdf8a,emissive:0xffc94a,emissiveIntensity:0.6}));
+halo.position.set(0,2.5,-0.2);buddha.add(halo);
+box(4,0.7,1.4,WOOD,0,0.85,-2.2,hall);
+for(const x of [-1.2,-0.4,0.4,1.2])cyl(0.18,0.14,0.16,10,GOLD,x,1.4,-2.2,hall);
+const candles=[];
+for(const x of [-1.6,1.6]){cyl(0.08,0.12,0.5,8,GOLD,x,1.5,-2.2,hall);const f=sph(0.08,8,0xffd76a,x,1.85,-2.2,hall);candles.push(f);const l=new THREE.PointLight(0xffaa44,0.5,3);l.position.set(x,1.9,-2.2);hall.add(l);}
+for(let i=0;i<3;i++)cyl(0.7,0.8,0.2,16,0xd85a3a,0,0.1,1.5+i*1.2,hall);
+
+/* ================= 求签房 ================= */
+const qianHouse=houseWithDoor(8,8,3.5,CREAM,2.8,2.8,-18,4,'求签房',RED);
+box(2,0.9,1.2,WOOD,0,0.85,-1.5,qianHouse);
+cyl(0.25,0.3,0.6,12,0xc08a4e,0,1.6,-1.5,qianHouse);
+for(let i=0;i<4;i++){cyl(0.15,0.2,0.5,10,0xc08a4e,-2+i*0.5,1.2,-2.8,qianHouse);}
+
+/* ================= 许愿屋 ================= */
+const wishHouse=houseWithDoor(6,6,3,CREAM,2.4,2.4,6,-24,'许愿屋',RED);
+box(1.5,0.8,1,WOOD,0,0.8,-1.5,wishHouse);
+
+/* ================= 放生池 ================= */
+const pond=new THREE.Group();pond.position.set(16,0,8);scene.add(pond);
+const pondMesh=cyl(4,4,0.3,32,0x4a9bd8,0,0.15,0,pond);pondMesh.material.transparent=true;pondMesh.material.opacity=0.85;
+for(let i=0;i<24;i++){const a=i/24*Math.PI*2;box(0.5,0.4,0.35,STONE,Math.cos(a)*4.2,0.2,Math.sin(a)*4.2,pond).rotation.y=-a;}
+for(let i=0;i<8;i++){const a=i/8*Math.PI*2;const r=1.5+Math.random()*2;sph(0.12,8,0xe8458a,Math.cos(a)*r,0.3,Math.sin(a)*r,pond);}
+for(let i=0;i<5;i++){const a=Math.random()*Math.PI*2;const r=1+Math.random()*3;sph(0.15,8,0xe8622a,Math.cos(a)*r,0.2,Math.sin(a)*r,pond);}
+
+/* ================= 许愿树 ================= */
+const treeRoot=new THREE.Group();treeRoot.position.set(0,0,-24);scene.add(treeRoot);
+cyl(0.5,0.7,4,10,0x7a5c3e,0,2,0,treeRoot);
+sph(2.2,10,GREEN,0,4.6,0,treeRoot);
+sph(1.6,10,0x8fc47a,1.4,5.2,0.6,treeRoot);
+sph(1.4,10,GREEN,-1.2,5,-0.4,treeRoot);
+for(let i=0;i<10;i++){const a=i/10*Math.PI*2;sph(0.12,6,0xd84a3a,Math.cos(a)*1.8,4.4+Math.sin(a)*0.6,Math.sin(a)*1.8,treeRoot);}
+
+/* ================= 香炉 ================= */
+const censer=new THREE.Group();censer.position.set(0,0,18);scene.add(censer);
+cyl(0.9,1,0.9,14,0xa8743e,0,0.45,0,censer);
+cyl(1.1,1.1,0.18,14,0xc08a4e,0,0.95,0,censer);
+for(const x of [-0.25,0,0.25]){cyl(0.025,0.025,1.1,6,0x6a3a1a,x,1.6,0,censer);sph(0.05,6,0xff5533,x,2.2,0,censer);}
+const incenseLights=[];
+for(const x of [-0.25,0,0.25]){const l=new THREE.PointLight(0xff5533,0.3,1.5);l.position.set(x,2.2,18);scene.add(l);incenseLights.push(l);}
+
+/* ================= 木鱼 ================= */
+const muyuRoot=new THREE.Group();muyuRoot.position.set(-6,0,18);scene.add(muyuRoot);
+cyl(0.85,0.95,0.28,18,0xd85a3a,0,0.14,0,muyuRoot);
+const muyuBody=sph(0.6,16,WOOD,0,0.7,0,muyuRoot);muyuBody.scale.set(1,0.85,1);
+box(0.75,0.12,0.16,DARK,0,0.6,0.5,muyuRoot);
+for(const x of [-0.2,0.2])sph(0.06,8,DARK,x,0.9,0.42,muyuRoot);
+const hammer=new THREE.Group();hammer.position.set(0.9,1,0.15);hammer.rotation.z=-0.4;muyuRoot.add(hammer);
+cyl(0.05,0.05,1,6,0xb08050,0,0,0,hammer).rotation.z=Math.PI/2;
+sph(0.17,10,0x8a5a2a,0.5,0,0,hammer);
+
+/* ================= 造景 ================= */
+function jingchuang(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  cyl(0.55,0.7,0.4,8,STONE,0,0.2,0,g);cyl(0.32,0.32,2.2,8,0xe8d4b0,0,1.5,0,g);
+  cyl(0.45,0.45,0.18,8,0x6a4a2a,0,2.7,0,g);sph(0.28,8,GOLD,0,3,0,g);
+}
+jingchuang(-6,28);jingchuang(6,28);jingchuang(-6,8);jingchuang(6,8);
+function stoneLantern(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  cyl(0.35,0.45,0.3,6,STONE,0,0.15,0,g);cyl(0.15,0.15,1.0,6,STONE,0,0.8,0,g);
+  box(0.6,0.5,0.6,STONE,0,1.4,0,g);sph(0.1,6,0xffd76a,0,1.4,0.32,g);roof(0.7,0.5,0.7,0x8a6a3a,0,1.9,0,g);
+}
+stoneLantern(-4,26);stoneLantern(4,26);stoneLantern(-4,12);stoneLantern(4,12);
+stoneLantern(-12,16);stoneLantern(12,16);stoneLantern(-14,-16);stoneLantern(14,-16);
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2;const r=4.6;
+  const g=new THREE.Group();g.position.set(16+Math.cos(a)*r,0,8+Math.sin(a)*r);scene.add(g);
+  for(let j=0;j<6;j++){const pa=j/6*Math.PI*2;const petal=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.4,6),mat(0xe87ab0));petal.position.set(Math.cos(pa)*0.25,0.2,Math.sin(pa)*0.25);petal.rotation.z=Math.cos(pa)*0.5;petal.rotation.x=Math.sin(pa)*0.5;petal.castShadow=true;g.add(petal);}
+  sph(0.12,8,GOLD,0,0.25,0,g);
+}
+function pine(x,z,s=1){
+  const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);scene.add(g);
+  cyl(0.2,0.25,1.5,6,0x6a4a2a,0,0.75,0,g);
+  for(let i=0;i<3;i++){const c=new THREE.Mesh(new THREE.ConeGeometry(1.2-i*0.25,1.6,8),mat(0x3a6b3a));c.position.y=1.8+i*1.1;c.castShadow=true;g.add(c);}
+}
+function tree(x,z,s=1){
+  const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);scene.add(g);
+  cyl(0.22,0.3,1.8,6,0x7a5c3e,0,0.9,0,g);
+  sph(1.2,8,GREEN,0,2.6,0,g);sph(0.9,8,0x8fc47a,0.7,3,0.4,g);sph(0.8,8,GREEN,-0.7,2.9,-0.3,g);
+}
+tree(-22,26,1.3);tree(22,26,1.2);tree(-22,-20,1.4);tree(22,-20,1.3);
+tree(-14,-26,1.1);tree(14,-26,1.2);tree(-24,12,1.2);tree(24,12,1.1);
+pine(-10,30,1.1);pine(10,30,1.1);pine(-22,4,1.2);pine(24,4,1.1);
+pine(-16,-24,1.3);pine(16,-24,1.2);pine(-10,-24,1.1);pine(10,-26,1.2);
+function banner(x,z,color){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  cyl(0.05,0.05,3.5,6,WOOD,0,1.75,0,g);
+  const flag=box(0.4,1.2,0.02,color,0,2.8,0,g);flag.material.side=THREE.DoubleSide;
+}
+banner(-5,4,0xe8452b);banner(5,4,0xffd76a);banner(-5,10,0x5a9e4a);banner(5,10,0xd84a3a);
+function rock(x,z,s=1){
+  const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);scene.add(g);
+  const r1=new THREE.Mesh(new THREE.DodecahedronGeometry(0.8),mat(0x8a7a6a));r1.position.y=0.6;r1.castShadow=true;g.add(r1);
+  const r2=new THREE.Mesh(new THREE.DodecahedronGeometry(0.5),mat(0x9a8a7a));r2.position.set(0.5,0.4,0.3);r2.castShadow=true;g.add(r2);
+  const r3=new THREE.Mesh(new THREE.DodecahedronGeometry(0.4),mat(0x7a6a5a));r3.position.set(-0.4,0.35,-0.3);r3.castShadow=true;g.add(r3);
+}
+rock(10,14,1.2);rock(22,14,1.0);rock(12,0,1.1);
+for(let i=0;i<3;i++){cyl(0.55,0.65,0.15,16,0xd85a3a,-2+i*2,0.08,6);}
+function smallCenser(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  cyl(0.35,0.4,0.35,10,0xa8743e,0,0.18,0,g);cyl(0.42,0.42,0.08,10,0xc08a4e,0,0.4,0,g);
+  cyl(0.015,0.015,0.5,4,0x6a3a1a,0,0.6,0,g);sph(0.03,4,0xff5533,0,0.88,0,g);
+}
+smallCenser(-3,14);smallCenser(3,14);
+for(let i=0;i<24;i+=2){box(2.6,0.07,1.1,0xd0bea0,0,0.04,28-i*1.3);}
+
+/* 供灯 */
+const lampSlots=[];
+for(let i=0;i<5;i++){
+  const x=-4+i*2;
+  const g=new THREE.Group();g.position.set(x,0.6,10);scene.add(g);
+  cyl(0.12,0.15,0.3,8,GOLD,0,0,0,g);
+  const flame=sph(0.12,8,0x555555,0,0.3,0,g);flame.visible=false;
+  lampSlots.push({group:g,flame,lit:false});
+}
+/* 灯笼 */
+const lanterns=[];
+function lantern(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  cyl(0.07,0.07,5,6,WOOD,0,2.5,0,g);
+  const l=sph(0.38,14,0xe8452b,0,4.2,0,g);l.scale.set(1,1.2,1);
+  sph(0.06,6,GOLD,0,3.7,0,g);sph(0.06,6,GOLD,0,4.7,0,g);
+  const pl=new THREE.PointLight(0xff6633,0.4,4);pl.position.set(0,4.2,0);g.add(pl);
+  lanterns.push({obj:g,phase:Math.random()*6.28});
+}
+lantern(-4,30);lantern(4,30);lantern(-7,14);lantern(7,14);lantern(-18,10);lantern(18,14);
+
+/* ================= 人物 ================= */
+const npcs=[];
+function buildHead(g,skin,opts={}){
+  const head=sph(0.4,24,skin,0,1.5,0,g);head.scale.set(1,1.05,1);
+  for(const dx of [-1,1]){const ear=sph(0.08,10,skin,dx*0.4,1.5,0,g);ear.scale.set(0.6,1,0.5);}
+  for(const dx of [-0.15,0.15]){const brow=box(0.12,0.035,0.03,opts.browColor||0x3a2210,dx,1.62,0.35,g);if(opts.browAngle)brow.rotation.z=dx>0?-opts.browAngle:opts.browAngle;}
+  if(opts.closed){for(const dx of [-0.15,0.15])box(0.13,0.025,0.025,DARK,dx,1.52,0.35,g);}
+  else{for(const dx of [-0.15,0.15]){sph(0.055,10,0xffffff,dx,1.53,0.34,g).scale.set(1,1.1,0.5);sph(0.035,8,DARK,dx,1.53,0.37,g);sph(0.012,6,0xffffff,dx+0.012,1.55,0.39,g);}}
+  sph(0.045,8,opts.noseColor||0xe8b878,0,1.45,0.4,g);
+  const sm=new THREE.Mesh(new THREE.TorusGeometry(0.075,0.018,6,12,Math.PI),mat(opts.mouthColor||0x8a3a2a));
+  sm.position.set(0,1.36,0.37);sm.rotation.z=Math.PI;g.add(sm);
+  for(const dx of [-1,1]){const bl=sph(0.06,8,0xf08a6b,dx*0.24,1.4,0.32,g);bl.material.transparent=true;bl.material.opacity=0.5;bl.scale.set(1,0.7,0.4);}
+}
+function makeMonk(x,z,rotY,opts={}){
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rotY;scene.add(g);
+  const robeColor=opts.robe||0xd8621e;g.scale.setScalar(opts.scale||1);
+  if(opts.pose!=='sit'){for(const dx of [-0.15,0.15]){const f=sph(0.13,10,0x5a3218,dx,0.1,0.05,g);f.scale.set(1,0.6,1.4);}}
+  const body=sph(0.5,20,robeColor,0,0.75,0,g);body.scale.set(1,1.15,0.95);
+  const shoulders=sph(0.52,18,robeColor,0,1.05,0,g);shoulders.scale.set(1.1,0.4,1);
+  box(0.65,0.12,0.06,0xf2c96b,0,0.92,0.47,g).rotation.z=0.32;
+  box(0.65,0.12,0.06,0xf2c96b,0,0.74,0.47,g).rotation.z=0.32;
+  for(let i=0;i<14;i++){const a=i/14*Math.PI*2;const bead=sph(0.055,10,0x6a3a1a,Math.cos(a)*0.34,0.92+Math.sin(a)*0.14,Math.sin(a)*0.25+0.28,g);bead.material.roughness=0.4;}
+  buildHead(g,SKIN,{closed:opts.eyes==='closed'});
+  if(opts.jieba!==false){for(let i=0;i<6;i++){const a=i/6*Math.PI*2;sph(0.025,6,0x8a5a2a,Math.cos(a)*0.12,1.88,Math.sin(a)*0.12,g);}}
+  if(opts.beard){const beard=sph(0.22,12,0xf0f0f0,0,1.25,0.34,g);beard.scale.set(1,1.3,0.5);}
+  if(opts.hat){const hat=new THREE.Mesh(new THREE.ConeGeometry(0.55,0.3,12),mat(0xd99a3a));hat.position.set(0,1.9,0);hat.castShadow=true;g.add(hat);}
+  if(opts.pose==='pray'){const hands=sph(0.17,12,SKIN,0,0.85,0.42,g);hands.scale.set(1.2,1.5,0.6);}
+  else if(opts.pose==='sweep'){const b=new THREE.Group();b.position.set(0.5,0.5,0.3);b.rotation.z=-0.4;g.add(b);cyl(0.03,0.03,1.4,6,0x8a6a3a,0,0,0,b);box(0.3,0.4,0.15,0xd99a3a,0,-0.8,0,b);}
+  else if(opts.pose==='sit'){const l=sph(0.6,16,robeColor,0,0.25,0,g);l.scale.set(1.3,0.4,1);for(const dx of [-0.35,0.35])sph(0.14,10,SKIN,dx,0.45,0.35,g);}
+  const data={group:g,pos:new THREE.Vector3(x,0,z),name:opts.name||'小和尚',walk:opts.walk||null,walkT:Math.random()*6,isDiviner:opts.isDiviner||false};
+  npcs.push(data);return data;
+}
+function makeWorshipper(x,z,rotY,opts={}){
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rotY;scene.add(g);
+  const c=opts.color||0x3a7bd5;g.scale.setScalar(opts.scale||1);
+  for(const dx of [-0.13,0.13]){const f=sph(0.11,10,0x3a2210,dx,0.1,0.05,g);f.scale.set(1,0.6,1.3);}
+  const body=sph(0.45,20,c,0,0.72,0,g);body.scale.set(1,1.15,0.95);
+  const shoulders=sph(0.46,18,c,0,1.0,0,g);shoulders.scale.set(1.1,0.4,1);
+  box(0.5,0.1,0.05,0xffffff,0,0.9,0.43,g);box(0.6,0.08,0.5,0x3a2210,0,0.6,0,g).scale.set(1,1,0.6);
+  for(const dx of [-1,1]){const arm=cyl(0.1,0.12,0.5,10,c,dx*0.42,0.85,0.05,g);arm.rotation.z=dx*0.2;sph(0.1,10,SKIN,dx*0.5,0.6,0.05,g);}
+  buildHead(g,SKIN,{});
+  if(opts.hair==='bun'){const hair=sph(0.41,18,0x2a1a10,0,1.56,-0.05,g);hair.scale.set(1,0.9,1);sph(0.15,10,0x2a1a10,0,1.9,-0.05,g);}
+  else if(opts.hair==='turban'){const turban=sph(0.44,18,opts.turbanColor||0x8a4a8a,0,1.65,-0.05,g);turban.scale.set(1,0.75,1);}
+  else if(opts.hair==='braid'){const hair=sph(0.41,18,0x2a1a10,0,1.56,-0.05,g);hair.scale.set(1,0.9,1);cyl(0.06,0.04,0.5,6,0x2a1a10,0,1.2,-0.35,g);for(let i=0;i<3;i++)sph(0.07,8,0xd84a3a,0,1.35-i*0.15,-0.35,g);}
+  else{const hair=sph(0.41,18,0x2a1a10,0,1.56,-0.05,g);hair.scale.set(1,0.9,1);}
+  if(opts.pose==='pray'){const h=sph(0.13,12,SKIN,0,0.9,0.4,g);h.scale.set(1.1,1.4,0.5);}
+  const data={group:g,pos:new THREE.Vector3(x,0,z),name:opts.name||'香客',walk:opts.walk||null,walkT:Math.random()*6};
+  npcs.push(data);return data;
+}
+
+makeMonk(2,30,Math.PI,{name:'迎客僧·慧明',pose:'pray',robe:0xe87a2a,scale:1.05});
+makeMonk(-2,30,Math.PI,{name:'迎客僧·慧觉',pose:'pray',robe:0xd8621e});
+makeMonk(-10,24,0,{name:'扫地僧·苦行',pose:'sweep',robe:0x8a6a3a,eyes:'closed',hat:true,scale:0.95,walk:{x1:-10,z1:24,x2:-10,z2:10,speed:1.0}});
+makeMonk(-3,22,Math.PI,{name:'老僧·悟道',pose:'pray',robe:0x9a2a1a,beard:true,scale:1.08});
+makeWorshipper(-5,20,Math.PI,{name:'祈福老奶奶',color:0x8a4a8a,pose:'pray',hair:'turban',turbanColor:0x6a3a6a,scale:0.9});
+makeWorshipper(4,22,Math.PI,{name:'香客·李先生',color:0x3a7bd5,pose:'pray'});
+makeWorshipper(6,20,Math.PI,{name:'少女·阿秀',color:0xe8458a,hair:'braid',scale:0.92});
+makeMonk(0,-2,0,{name:'打坐僧·禅心',pose:'sit',robe:0xd99a3a,eyes:'closed'});
+makeMonk(2,-2,0,{name:'诵经僧·慧远',pose:'sit',robe:0x5a9e4a,eyes:'closed',scale:0.98});
+makeMonk(-2,-2,0,{name:'诵经僧·慧深',pose:'sit',robe:0x3a8a4a,eyes:'closed'});
+makeWorshipper(0,2,0,{name:'虔诚信徒·王居士',color:0xd84a3a,pose:'pray'});
+makeMonk(-18,4,0,{name:'解签僧·玄机',pose:'pray',robe:0x8a3a7a,beard:true,eyes:'closed',scale:1.02,isDiviner:true});
+makeWorshipper(-16,7,Math.PI*0.5,{name:'求签香客·刘姑娘',color:0xe8458a,hair:'braid',pose:'pray'});
+makeWorshipper(14,10,Math.PI*0.5,{name:'喂鱼香客·陈伯',color:0xe8b04a,hair:'turban',turbanColor:0xa87a3a,scale:0.95});
+makeWorshipper(8,16,Math.PI,{name:'散步居士·赵先生',color:0x5a9e4a,walk:{x1:8,z1:16,x2:22,z2:16,speed:1.2}});
+makeMonk(6,-22,Math.PI,{name:'许愿僧·慧愿',pose:'pray',robe:0x7a9e5a,eyes:'closed'});
+makeWorshipper(8,-20,Math.PI,{name:'许愿少女·小翠',color:0xe8458a,hair:'braid',pose:'pray',scale:0.9});
+makeMonk(-6,-22,Math.PI,{name:'巡逻僧·慧巡',pose:'pray',robe:0xd8621e,walk:{x1:-6,z1:-22,x2:14,z2:-22,speed:1.3}});
+makeMonk(18,18,Math.PI,{name:'知客僧·慧文',pose:'pray',robe:0x3a7bd5,scale:1.02});
+makeWorshipper(0,38,Math.PI,{name:'入寺香客·张伯',color:0x5a6ac8,walk:{x1:0,z1:38,x2:0,z2:24,speed:0.8}});
+makeWorshipper(-2,40,Math.PI,{name:'入寺香客·王婶',color:0xc85a8a,hair:'turban',turbanColor:0x6a3a6a,walk:{x1:-2,z1:40,x2:-2,z2:26,speed:0.7}});
+makeWorshipper(3,36,Math.PI,{name:'入寺香客·小童',color:0xe8a04a,scale:0.75,walk:{x1:3,z1:36,x2:3,z2:22,speed:1.0}});
+
+/* ================= 玩家（换装） ================= */
+const player=new THREE.Group();scene.add(player);
+const pBody=sph(0.45,20,0xe8452b,0,0.72,0,player);pBody.scale.set(1,1.15,0.95);
+const pShoulders=sph(0.46,18,0xe8452b,0,1.0,0,player);pShoulders.scale.set(1.1,0.4,1);
+for(const dx of [-0.13,0.13]){const f=sph(0.11,10,0x3a2210,dx,0.1,0.05,player);f.scale.set(1,0.6,1.3);}
+const pSash=box(0.58,0.12,0.06,0xf2c96b,0,0.88,0.44,player);pSash.rotation.z=0.3;
+buildHead(player,SKIN,{});
+for(let i=0;i<6;i++){const a=i/6*Math.PI*2;sph(0.025,6,0x8a5a2a,Math.cos(a)*0.12,1.88,Math.sin(a)*0.12,player);}
+const pHalo=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.04,8,30),new THREE.MeshStandardMaterial({color:0xffdf8a,emissive:0xffc94a,emissiveIntensity:0.8}));
+pHalo.position.set(0,1.55,-0.2);pHalo.visible=false;player.add(pHalo);
+const pStaff=new THREE.Group();pStaff.position.set(0.5,0,0);pStaff.visible=false;
+cyl(0.03,0.03,1.6,6,0x8a5a2a,0,0.9,0,pStaff);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(0.12,0.03,6,12),mat(0xe8b04a));ring.position.set(0,1.75,0);pStaff.add(ring);
+player.add(pStaff);
+const shadowMesh=new THREE.Mesh(new THREE.CircleGeometry(0.5,20),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.2}));
+shadowMesh.rotation.x=-Math.PI/2;shadowMesh.position.y=0.01;player.add(shadowMesh);
+const ROBE_STYLES=[
+  {color:0xc97a3a,sash:0xa85a2a,halo:false,staff:false},
+  {color:0xd9a63a,sash:0xc08a2a,halo:false,staff:false},
+  {color:0xc0392b,sash:0xe8b04a,halo:false,staff:false},
+  {color:0x8a3a8a,sash:0xe8b04a,halo:false,staff:false},
+  {color:0xe8b04a,sash:0xffdf8a,halo:true,staff:false},
+  {color:0xd42a2a,sash:0xffd700,halo:true,staff:true},
+];
+function updateRobe(){
+  let idx=0;for(let i=0;i<LEVELS.length;i++)if(merit>=LEVELS[i].min)idx=i;
+  const s=ROBE_STYLES[idx];
+  pBody.material.color.setHex(s.color);
+  pShoulders.material.color.setHex(s.color);
+  pSash.material.color.setHex(s.sash);
+  pHalo.visible=s.halo;
+  pStaff.visible=s.staff;
+}
+
+/* ================= 状态 ================= */
+const state={pos:new THREE.Vector3(0,0,28),yaw:0,camYaw:0,camPitch:0.3,camDist:4.5,speed:4.0,moving:false,walkT:0};
+const LOOK_X=0.0075,LOOK_Y=0.0055;
+const joyEl=document.getElementById('joystick'),stickEl=document.getElementById('stick');
+let joyActive=false,joyX=0,joyY=0,joyId=null;
+function updateJoy(t){
+  const r=joyEl.getBoundingClientRect();
+  let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2);
+  const max=r.width/2-18,len=Math.hypot(dx,dy);
+  if(len>max){dx=dx/len*max;dy=dy/len*max;}
+  stickEl.style.transform=`translate(${dx}px,${dy}px)`;
+  joyX=dx/max;joyY=dy/max;
+}
+joyEl.addEventListener('touchstart',e=>{e.preventDefault();joyActive=true;joyId=e.changedTouches[0].identifier;updateJoy(e.changedTouches[0]);},{passive:false});
+joyEl.addEventListener('touchmove',e=>{if(!joyActive)return;for(const t of e.changedTouches)if(t.identifier===joyId)updateJoy(t);},{passive:false});
+joyEl.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===joyId){joyActive=false;joyX=joyY=0;stickEl.style.transform='translate(0,0)';}});
+let lookId=null,lastLX=0,lastLY=0;
+renderer.domElement.addEventListener('touchstart',e=>{for(const t of e.changedTouches)if(t.clientX>innerWidth*0.42&&lookId===null){lookId=t.identifier;lastLX=t.clientX;lastLY=t.clientY;}},{passive:false});
+renderer.domElement.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===lookId){const dx=t.clientX-lastLX,dy=t.clientY-lastLY;state.camYaw-=dx*LOOK_X;state.camPitch=Math.max(-0.1,Math.min(0.9,state.camPitch-dy*LOOK_Y));lastLX=t.clientX;lastLY=t.clientY;}},{passive:false});
+renderer.domElement.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===lookId)lookId=null;});
+const keys={};
+addEventListener('keydown',e=>keys[e.code]=true);
+addEventListener('keyup',e=>keys[e.code]=false);
+let mouseDown=false;
+renderer.domElement.addEventListener('mousedown',()=>mouseDown=true);
+addEventListener('mouseup',()=>mouseDown=false);
+addEventListener('mousemove',e=>{if(mouseDown){state.camYaw-=e.movementX*0.004;state.camPitch=Math.max(-0.1,Math.min(0.9,state.camPitch-e.movementY*0.003));}});
+const minimapEl=document.getElementById('minimap');
+document.getElementById('mapToggle').addEventListener('click',()=>minimapEl.classList.remove('hide'));
+minimapEl.addEventListener('click',e=>{if(e.target.id==='mapToggle')return;if(!minimapEl.classList.contains('hide'))minimapEl.classList.add('hide');});
+
+/* ================= Supabase 排行榜 ================= */
+const SB_URL='https://cogtfsqhwiushgqsuqdf.supabase.co';
+const SB_KEY='sb_publishable_FSUTq9Ccb6-1H72Qg_Rbew_xDFfpV1W';
+const SB_HEADERS={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+function getDeviceId(){
+  let id=localStorage.getItem('ym_device_id');
+  if(!id){id='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('ym_device_id',id);}
+  return id;
+}
+const DEVICE_ID=getDeviceId();
+function getNickname(){
+  let n=localStorage.getItem('ym_nickname');
+  if(!n){
+    n=prompt('给自己起个法号（昵称）：','修行者'+Math.floor(Math.random()*9999));
+    if(!n) n='修行者'+Math.floor(Math.random()*9999);
+    localStorage.setItem('ym_nickname',n);
+  }
+  return n;
+}
+let sbRowId=localStorage.getItem('ym_sb_rowid')||null;
+async function uploadMerit(){
+  try{
+    const nick=getNickname();
+    const val=Math.floor(merit);
+    if(!sbRowId){
+      const r=await fetch(SB_URL+'/rest/v1/merit_rank',{
+        method:'POST',
+        headers:{...SB_HEADERS,'Prefer':'return=representation'},
+        body:JSON.stringify({nickname:nick,merit:val,device_id:DEVICE_ID})
+      });
+      const data=await r.json();
+      if(Array.isArray(data)&&data[0]&&data[0].id){sbRowId=data[0].id;localStorage.setItem('ym_sb_rowid',sbRowId);}
+    } else {
+      await fetch(SB_URL+'/rest/v1/merit_rank?id=eq.'+sbRowId,{
+        method:'PATCH',
+        headers:SB_HEADERS,
+        body:JSON.stringify({nickname:nick,merit:val,device_id:DEVICE_ID,updated_at:new Date().toISOString()})
+      });
+    }
+  }catch(e){console.log('上传失败',e);}
+}
+async function fetchRank(){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/merit_rank?select=nickname,merit,device_id&order=merit.desc&limit=30',{headers:SB_HEADERS});
+    const data=await r.json();
+    return Array.isArray(data)?data:[];
+  }catch(e){return [];}
+}
+async function showRank(){
+  showModal(`<h3>🏆 功德排行榜</h3><p>正在读取…</p>`);
+  const list=await fetchRank();
+  let html=`<h3>🏆 功德排行榜</h3><div class="rank-list">`;
+  if(list.length===0){
+    html+=`<p style="font-size:12px;">暂无数据，去修行吧</p>`;
+  } else {
+    list.forEach((it,i)=>{
+      const me = it.device_id===DEVICE_ID;
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
+      html+=`<div class="rank-item${me?' me':''}"><span class="rk">${medal}</span><span class="nm">${it.nickname}</span><span class="mt">${Math.floor(it.merit)}</span></div>`;
+    });
+  }
+  html+=`</div><div class="btns"><button class="btn-ghost" id="rkClose">关闭</button></div>`;
+  showModal(html);
+  document.getElementById('rkClose').onclick=closeModal;
+}
+
+/* ================= 交互点 ================= */
+const POINTS=[
+  {key:'muyu',    x:-6,  z:18,  r:8,  btn:'btnMuyu',    label:'木鱼'},
+  {key:'censer',  x:0,   z:18,  r:8,  btn:'btnIncense', label:'香炉'},
+  {key:'buddha',  x:0,   z:-5,  r:10, btn:'btnBow',     label:'佛像'},
+  {key:'wish',    x:6,   z:-23, r:10, btn:'btnWish',    label:'许愿屋'},
+  {key:'release', x:16,  z:8,   r:8,  btn:'btnRelease', label:'放生池'},
+  {key:'light',   x:0,   z:10,  r:8,  btn:'btnLight',   label:'供灯处'},
+  {key:'copy',    x:-18, z:7,   r:8,  btn:'btnCopy',    label:'抄经处'},
+  {key:'divine',  x:-18, z:4,   r:8,  btn:'btnDivine',  label:'求签房'},
+];
+const btnEls={};
+['btnMuyu','btnBow','btnIncense','btnNPC','btnWish','btnRelease','btnLight','btnCopy','btnDivine'].forEach(id=>btnEls[id]=document.getElementById(id));
+let nearNPC=null;
+function updateInteraction(){
+  for(const p of POINTS){const el=document.getElementById(p.btn);if(el)el.classList.remove('show');}
+  const npcBtn=document.getElementById('btnNPC');if(npcBtn)npcBtn.classList.remove('show');
+  let nearest=null, nearestDist=Infinity;
+  for(const p of POINTS){
+    const d=Math.hypot(state.pos.x-p.x, state.pos.z-p.z);
+    if(d<p.r && d<nearestDist){ nearest=p; nearestDist=d; }
+  }
+  if(nearest){const el=document.getElementById(nearest.btn);if(el)el.classList.add('show');}
+  nearNPC=null; let npcDist=Infinity;
+  for(const n of npcs){
+    const d=Math.hypot(state.pos.x-n.pos.x, state.pos.z-n.pos.z);
+    if(d<3.5 && d<npcDist){ nearNPC=n; npcDist=d; }
+  }
+  if(nearNPC && npcBtn) npcBtn.classList.add('show');
+  const dbg=document.getElementById('debugPanel');
+  if(dbg){
+    let lines=['坐标: '+state.pos.x.toFixed(1)+','+state.pos.z.toFixed(1)];
+    if(nearest){ lines.push('靠近: '+nearest.label+' d='+nearestDist.toFixed(1)+'/'+nearest.r); }
+    else {
+      let closest=null,cd=Infinity;
+      for(const p of POINTS){const d=Math.hypot(state.pos.x-p.x,state.pos.z-p.z);if(d<cd){cd=d;closest=p;}}
+      if(closest) lines.push('最近: '+closest.label+' d='+cd.toFixed(1)+' 需<'+closest.r);
+    }
+    if(nearNPC) lines.push('NPC: '+nearNPC.name);
+    dbg.innerHTML=lines.join('<br>');
+  }
+}
+
+/* ================= 功德/难度 ================= */
+const LEVELS=[{n:'小沙弥',min:0},{n:'比丘',min:100},{n:'罗汉',min:500},{n:'菩萨',min:2000},{n:'佛陀',min:8000},{n:'方丈',min:20000}];
+let merit=parseFloat(localStorage.getItem('ym_v17_merit')||'0');
+const meritNumEl=document.getElementById('meritNum'),titleNameEl=document.getElementById('titleName');
+let lastTitle='';
+function refreshHUD(){
+  meritNumEl.textContent=Math.floor(merit);
+  let t=LEVELS[0];for(const L of LEVELS)if(merit>=L.min)t=L;
+  titleNameEl.textContent=t.n;
+  localStorage.setItem('ym_v17_merit',merit);
+  if(lastTitle&&lastTitle!==t.n&&typeof updateRobe==='function'){toast('🎉 修行精进，晋为「'+t.n+'」！');updateRobe();}
+  lastTitle=t.n;
+}
+refreshHUD();
+let todayGain=parseFloat(localStorage.getItem('ym_daily_'+new Date().toDateString())||'0');
+const DAILY_CAP=200;
+function addMerit(n){
+  if(todayGain>=DAILY_CAP){toast('今日功德已满，明日再来');return;}
+  const real=Math.min(n,DAILY_CAP-todayGain);
+  merit+=real;todayGain+=real;
+  localStorage.setItem('ym_daily_'+new Date().toDateString(),todayGain);
+  refreshHUD();
+  uploadMerit();
+}
+
+/* ================= 音效 ================= */
+let actx=null;
+function getCtx(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();return actx;}
+function playDong(){const c=getCtx(),t=c.currentTime;const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(80,t+0.2);g.gain.setValueAtTime(0.3,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.3);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.32);}
+function playChime(){const c=getCtx(),t=c.currentTime;[660,880,1320].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.12,t+i*0.07);g.gain.exponentialRampToValueAtTime(0.001,t+i*0.07+0.5);o.connect(g);g.connect(c.destination);o.start(t+i*0.07);o.stop(t+i*0.07+0.6);});}
+
+/* ================= 提示/弹窗 ================= */
+let toastTimer=null;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1500);}
+function floatAt(x,y,txt,color){const f=document.createElement('div');f.className='float';f.textContent=txt;if(color)f.style.color=color;f.style.left=x+'px';f.style.top=y+'px';document.body.appendChild(f);setTimeout(()=>f.remove(),1000);}
+function worldToScreen(v){const p=v.clone().project(camera);return{x:(p.x*0.5+0.5)*innerWidth,y:(-p.y*0.5+0.5)*innerHeight};}
+const maskEl=document.getElementById('mask'),modalBox=document.getElementById('modalBox');
+function showModal(html){modalBox.innerHTML=html;maskEl.classList.add('show');}
+function closeModal(){maskEl.classList.remove('show');modalBox.innerHTML='';}
+maskEl.addEventListener('click',e=>{if(e.target===maskEl)closeModal();});
+
+/* ================= 求签房六术 ================= */
+const DIVINE_MENU=[
+  {key:'qian',icon:'🎋',name:'求签'},
+  {key:'gua',icon:'☯️',name:'算卦'},
+  {key:'face',icon:'👤',name:'看相'},
+  {key:'dream',icon:'💭',name:'解梦'},
+  {key:'star',icon:'⭐',name:'星象'},
+  {key:'mbti',icon:'🧩',name:'人格'},
+];
+function openDivineMenu(){
+  let html=`<h3>🧘 解签僧·玄机</h3><p>施主想以何术问天机？</p><div class="divine-menu">`;
+  for(const d of DIVINE_MENU){html+=`<button data-k="${d.key}"><span class="ic">${d.icon}</span>${d.name}</button>`;}
+  html+=`</div><div class="btns"><button class="btn-ghost" id="dmClose">离开</button></div>`;
+  showModal(html);
+  document.getElementById('dmClose').onclick=closeModal;
+  modalBox.querySelectorAll('.divine-menu button').forEach(b=>{
+    b.onclick=()=>{const k=b.dataset.k;if(k==='qian')divineQian();else if(k==='gua')divineGua();else if(k==='face')divineFace();else if(k==='dream')divineDream();else if(k==='star')divineStar();else if(k==='mbti')divineMBTI();};
+  });
+}
+const QIANS=[
+  {t:'上上签',wen:'云开见月明，前程自坦平',jd:'心诚则灵，眼下困惑终会散去。保持耐心，善缘自来。'},
+  {t:'上签',wen:'春风化雨润无声，善念常存福自生',jd:'多行小善，福报在不经意间积累。'},
+  {t:'中签',wen:'山重水复疑无路，柳暗花明又一村',jd:'暂时阻滞不是绝境，换个角度会有转机。'},
+  {t:'中签',wen:'静水流深，不急不躁',jd:'慢下来反而更快，今日宜静心。'},
+  {t:'下签',wen:'雾锁重楼，且待晴时',jd:'近期或有小波折，守心待时，坏运自会过去。'},
+  {t:'上上签',wen:'一念放下，万般自在',jd:'困扰你的，往往是自己放不下的执念。'},
+];
+function divineQian(){
+  const q=QIANS[Math.floor(Math.random()*QIANS.length)];
+  showModal(`<h3>🎋 观音签</h3><div style="font-size:50px;margin:6px 0;">🎋</div>
+    <p id="qt">摇一摇签筒…</p><div id="qr"></div>
+    <div class="btns"><button class="btn-primary" id="qb">摇签</button><button class="btn-ghost" id="qr2">返回</button></div>`);
+  document.getElementById('qr2').onclick=openDivineMenu;
+  const btn=document.getElementById('qb'),tip=document.getElementById('qt'),res=document.getElementById('qr');
+  btn.onclick=()=>{
+    playChime();btn.disabled=true;btn.textContent='摇签中…';
+    setTimeout(()=>{
+      tip.textContent='签文如下';
+      res.innerHTML=`<div class="qianwen">${q.t} · ${q.wen}</div><div class="jieda">🤖 玄机解签：${q.jd}</div>`;
+      addMerit(2);btn.textContent='再摇一次';btn.disabled=false;
+      btn.onclick=()=>{const nq=QIANS[Math.floor(Math.random()*QIANS.length)];res.innerHTML=`<div class="qianwen">${nq.t} · ${nq.wen}</div><div class="jieda">🤖 玄机解签：${nq.jd}</div>`;addMerit(2);playChime();};
+    },700);
+  };
+}
+const GUAS=[
+  {n:'乾为天',s:'刚健中正，大吉',d:'行事宜刚不宜柔，但戒骄躁。'},
+  {n:'坤为地',s:'柔顺载物，厚德',d:'耐心等待，厚积薄发。'},
+  {n:'水雷屯',s:'初生艰难',d:'起步阶段多阻滞，守正待时。'},
+  {n:'山水蒙',s:'蒙昧待启',d:'多听多学，暂缓决断。'},
+  {n:'水天需',s:'等待时机',d:'不必急，时机未到。'},
+  {n:'天水讼',s:'争讼不利',d:'退一步，避免正面冲突。'},
+  {n:'地水师',s:'统众有方',d:'需纪律与领导力。'},
+  {n:'风天小畜',s:'小有蓄积',d:'积蓄力量，不宜大动作。'},
+  {n:'雷天大壮',s:'壮盛有力',d:'可进取，但防过刚。'},
+  {n:'火地晋',s:'晋升有望',d:'努力将得回报，宜上进。'},
+];
+function divineGua(){
+  showModal(`<h3>☯️ 周易算卦</h3><p>静心默念所问之事，掷三枚铜钱起卦…</p>
+    <div style="font-size:40px;margin:8px 0;">🪙🪙🪙</div><div id="gr"></div>
+    <div class="btns"><button class="btn-primary" id="gb">掷卦</button><button class="btn-ghost" id="gr2">返回</button></div>`);
+  document.getElementById('gr2').onclick=openDivineMenu;
+  const btn=document.getElementById('gb'),res=document.getElementById('gr');
+  btn.onclick=()=>{
+    playChime();btn.disabled=true;btn.textContent='起卦中…';
+    setTimeout(()=>{
+      const gua=GUAS[Math.floor(Math.random()*GUAS.length)];
+      res.innerHTML=`<div class="qianwen">第${Math.floor(Math.random()*64)+1}卦 · ${gua.n}</div><div class="jieda"><b>${gua.s}</b><br>${gua.d}</div>`;
+      addMerit(2);btn.textContent='再起一卦';btn.disabled=false;
+      btn.onclick=()=>{const g=GUAS[Math.floor(Math.random()*GUAS.length)];res.innerHTML=`<div class="qianwen">${g.n}</div><div class="jieda"><b>${g.s}</b><br>${g.d}</div>`;addMerit(2);playChime();};
+    },800);
+  };
+}
+function divineFace(){
+  showModal(`<h3>👤 看相</h3><p>选一项，玄机为你解析</p>
+    <div class="quiz-opts">
+      <button data-f="眉">眉毛</button><button data-f="眼">眼睛</button><button data-f="鼻">鼻梁</button>
+      <button data-f="嘴">嘴唇</button><button data-f="耳">耳朵</button>
+    </div><div class="btns"><button class="btn-ghost" id="fr">返回</button></div>`);
+  document.getElementById('fr').onclick=openDivineMenu;
+  const faceData={
+    '眉':'眉主兄弟与情感。眉清目秀者，人缘佳，重情义；眉浓者，性刚直。',
+    '眼':'眼为心之窗。眼神安定者，心性沉稳，遇事不慌；眼神灵动者，聪慧善思。',
+    '鼻':'鼻主财帛。鼻梁挺直者，中年运势稳；鼻头圆润者，聚财有福。',
+    '嘴':'嘴主晚年与口福。唇厚者，重感情；唇薄者，善言辞。',
+    '耳':'耳主福寿。耳垂厚者，福泽深；耳廓分明者，聪颖好记。'
+  };
+  modalBox.querySelectorAll('.quiz-opts button').forEach(b=>{
+    b.onclick=()=>{
+      const f=b.dataset.f;
+      showModal(`<h3>👤 看相 · ${f}</h3><div class="jieda">${faceData[f]}</div>
+        <p style="font-size:11px;color:#b98a3e;margin-top:8px;">相由心生，仅供参悟</p>
+        <div class="btns"><button class="btn-primary" id="fq">再问一项</button><button class="btn-ghost" id="fc">返回</button></div>`);
+      addMerit(1);playChime();
+      document.getElementById('fq').onclick=divineFace;
+      document.getElementById('fc').onclick=openDivineMenu;
+    };
+  });
+}
+function divineDream(){
+  showModal(`<h3>💭 解梦</h3><p>写下你的梦，玄机为你解</p>
+    <textarea id="drInput" placeholder="例如：梦见水、梦见飞翔、梦见故人…"></textarea>
+    <div class="btns"><button class="btn-primary" id="db">求解</button><button class="btn-ghost" id="dr">返回</button></div>`);
+  document.getElementById('dr').onclick=openDivineMenu;
+  document.getElementById('db').onclick=()=>{
+    const txt=document.getElementById('drInput').value.trim();
+    let out;
+    if(!txt) out='施主未写梦境，如何解呢？';
+    else if(/水|河|海|雨/.test(txt)) out='梦见水，主财与情。水清则运顺，水浊则心乱。';
+    else if(/飞|翔|鸟/.test(txt)) out='梦见飞翔，主志得意满，渴望自由。';
+    else if(/故人|死去|亲人|奶奶|爷爷/.test(txt)) out='梦见故人，是思念与未了情。宜静心追思，勿过度悲戚。';
+    else if(/死|血|哭/.test(txt)) out='梦见死血哭，旧事终结之兆。反是新生，莫惧。';
+    else if(/牙|掉|失/.test(txt)) out='梦见牙掉，主口舌或失去之虑。宜谨慎言辞。';
+    else if(/考试|迟到|找/.test(txt)) out='梦见考试迟到，主现实压力。放宽心，事缓则圆。';
+    else out='此梦意象复杂，玄机以为：静观其变，不必深究。心安即吉。';
+    showModal(`<h3>💭 解梦</h3><div class="jieda">${out}</div>
+      <div class="btns"><button class="btn-primary" id="dq">再解一梦</button><button class="btn-ghost" id="dc">返回</button></div>`);
+    addMerit(2);playChime();
+    document.getElementById('dq').onclick=divineDream;
+    document.getElementById('dc').onclick=openDivineMenu;
+  };
+}
+function divineStar(){
+  const zodiac=['白羊','金牛','双子','巨蟹','狮子','处女','天秤','天蝎','射手','摩羯','水瓶','双鱼'];
+  showModal(`<h3>⭐ 星象</h3><p>选择你的星座，看今日星象</p>
+    <div class="quiz-opts" id="zodOpts"></div>
+    <div class="btns"><button class="btn-ghost" id="zr">返回</button></div>`);
+  document.getElementById('zr').onclick=openDivineMenu;
+  const opts=document.getElementById('zodOpts');
+  for(const z of zodiac){
+    const b=document.createElement('button');b.textContent=z+'座';
+    b.onclick=()=>{
+      const luck=Math.floor(Math.random()*5);
+      const stars=['★☆☆☆☆','★★☆☆☆','★★★☆☆','★★★★☆','★★★★★'][luck];
+      const tips=['宜静不宜动，守心为上。','小有波折，终能化解。','平稳之象，顺其自然。','运势上扬，宜进取。','大吉之象，诸事顺遂。'];
+      showModal(`<h3>⭐ ${z}座 · 今日星象</h3><div class="qianwen">${stars}</div><div class="jieda">${tips[luck]}<br><br><span style="font-size:11px;color:#b98a3e;">星象之说，听之乐之，不可尽信。</span></div><div class="btns"><button class="btn-ghost" id="zc">返回</button></div>`);
+      addMerit(1);playChime();
+      document.getElementById('zc').onclick=openDivineMenu;
+    };
+    opts.appendChild(b);
+  }
+}
+const MBTI_QS=[
+  {q:'周末你更想…',a:'出门聚会，见见朋友',b:'宅家独处，安静充电',d:'EI'},
+  {q:'做决定时你更信…',a:'实在的经验与细节',b:'直觉与未来的可能',d:'SN'},
+  {q:'遇到分歧你更倾向…',a:'讲道理，看逻辑',b:'顾感受，重和谐',d:'TF'},
+  {q:'你的日常更偏向…',a:'计划清晰，按部就班',b:'随性灵活，见招拆招',d:'JP'},
+];
+let mbtiIdx=0,mbtiAns=[];
+function divineMBTI(){mbtiIdx=0;mbtiAns=[];renderMBTI();}
+function renderMBTI(){
+  if(mbtiIdx>=MBTI_QS.length){showMBTIResult();return;}
+  const q=MBTI_QS[mbtiIdx];
+  showModal(`<h3>🧩 人格测试</h3><div class="quiz-progress">第 ${mbtiIdx+1} / ${MBTI_QS.length} 题</div>
+    <div class="quiz-q">${q.q}</div>
+    <div class="quiz-opts"><button id="ma">${q.a}</button><button id="mb">${q.b}</button></div>
+    <div class="btns"><button class="btn-ghost" id="mr">返回</button></div>`);
+  document.getElementById('mr').onclick=openDivineMenu;
+  document.getElementById('ma').onclick=()=>{mbtiAns.push(q.d[0]);mbtiIdx++;renderMBTI();};
+  document.getElementById('mb').onclick=()=>{mbtiAns.push(q.d[1]);mbtiIdx++;renderMBTI();};
+}
+function showMBTIResult(){
+  const type=mbtiAns.join('');
+  const desc={E:'外向',I:'内向',N:'直觉',S:'实感',T:'思考',F:'情感',J:'判断',P:'感知'};
+  const nick={INTJ:'谋略家',INTP:'逻辑家',ENTJ:'指挥官',ENTP:'辩论家',INFJ:'提倡者',INFP:'调停者',ENFJ:'主人公',ENFP:'竞选者',ISTJ:'物流师',ISFJ:'守卫者',ESTJ:'总经理',ESFJ:'执政官',ISTP:'鉴赏家',ISFP:'探险家',ESTP:'企业家',ESFP:'表演者'};
+  showModal(`<h3>🧩 你的人格</h3><div class="qianwen">${type}</div>
+    <p style="font-size:13px;">${type.split('').map(c=>desc[c]).join(' · ')}</p>
+    <div class="jieda">「${nick[type]||'独特之人'}」<br>佛说众生皆有佛性，无论何种性格，皆可成道。接纳自己，便是修行。</div>
+    <div class="btns"><button class="btn-primary" id="mq">再测一次</button><button class="btn-ghost" id="mc">返回</button></div>`);
+  addMerit(3);playChime();
+  document.getElementById('mq').onclick=divineMBTI;
+  document.getElementById('mc').onclick=openDivineMenu;
+}
+
+/* ================= 许愿任务 ================= */
+const TASKS=[
+  {id:'muyu10',name:'诚心敲木鱼',desc:'敲木鱼 10 次',need:10,key:'muyu'},
+  {id:'incense3',name:'上香三炷',desc:'上香 3 次',need:3,key:'incense'},
+  {id:'copy5',name:'静心抄经',desc:'抄经 5 字',need:5,key:'copy'},
+  {id:'release1',name:'慈悲放生',desc:'放生 1 条锦鲤',need:1,key:'release'},
+  {id:'walk100',name:'绕寺行走',desc:'在寺中行走 100 米',need:100,key:'walk'},
+];
+let currentTask=null;
+function startWishTask(){
+  if(currentTask&&currentTask.progress>=currentTask.need){openWishFinal();return;}
+  if(!currentTask){const t=TASKS[Math.floor(Math.random()*TASKS.length)];currentTask={...t,progress:0};}
+  renderTaskPanel();
+}
+function renderTaskPanel(){
+  const t=currentTask;
+  const pct=Math.min(100,t.progress/t.need*100);
+  showModal(`<h3>🌳 许愿 · 需先完成一桩善行</h3>
+    <div class="task-card">
+      <div class="tname">${t.name}</div>
+      <div class="tdesc">${t.desc}（${t.progress}/${t.need}）</div>
+      <div class="task-bar"><i style="width:${pct}%"></i></div>
+    </div>
+    <p style="font-size:11px;color:#b98a3e;">完成任务后，愿望方得圆满</p>
+    <div class="btns"><button class="btn-primary" id="tw">去完成</button><button class="btn-ghost" id="tc">稍后</button></div>`);
+  document.getElementById('tw').onclick=closeModal;
+  document.getElementById('tc').onclick=closeModal;
+}
+function taskProgress(key,amount){
+  if(!currentTask||currentTask.key!==key)return;
+  currentTask.progress=Math.min(currentTask.need,currentTask.progress+amount);
+  if(currentTask.progress>=currentTask.need){toast('✅ 善行圆满，可去许愿了');}
+}
+function openWishFinal(){
+  showModal(`<h3>🌳 许愿</h3><p>善行圆满，写下心愿，红绸将替你系上…</p>
+    <textarea id="w2" placeholder="愿…"></textarea>
+    <div class="btns"><button class="btn-ghost" id="c2">取消</button><button class="btn-primary" id="o2">系上红绸</button></div>`);
+  document.getElementById('c2').onclick=closeModal;
+  document.getElementById('o2').onclick=()=>{
+    const w=document.getElementById('w2').value.trim();
+    playChime();addMerit(5);closeModal();
+    currentTask=null;
+    toast(w?'🌳 红绸已系上，愿你所求皆如愿，功德+5':'🌳 愿望已上达，功德+5');
+  };
+}
+btnEls['btnWish'].addEventListener('click',startWishTask);
+btnEls['btnDivine'].addEventListener('click',openDivineMenu);
+document.getElementById('btnRank').addEventListener('click',showRank);
+
+/* ================= 放生/供灯/抄经 ================= */
+btnEls['btnRelease'].addEventListener('click',()=>{
+  playChime();addMerit(2);taskProgress('release',1);
+  const fish=new THREE.Mesh(new THREE.SphereGeometry(0.2,10,10),mat(0xe8622a));
+  fish.position.set(16+2,0.3,8+1);scene.add(fish);
+  let ft=0;
+  const fishAnim=setInterval(()=>{
+    ft+=0.05;fish.position.x=16+Math.cos(ft)*3;fish.position.z=8+Math.sin(ft)*3;fish.rotation.y=-ft;
+    if(ft>6){clearInterval(fishAnim);scene.remove(fish);}
+  },50);
+  const s=worldToScreen(new THREE.Vector3(16,1,8));
+  floatAt(s.x,s.y,'放生 +2','#7bd3ff');
+  toast('🐟 锦鲤入水，功德+2');
+});
+btnEls['btnLight'].addEventListener('click',()=>{
+  playChime();addMerit(1);
+  for(const slot of lampSlots){if(!slot.lit){slot.lit=true;slot.flame.visible=true;slot.flame.material=mat(0xffd76a,{emissive:0xffaa44,emissiveIntensity:1.2});const pl=new THREE.PointLight(0xffaa44,0.6,3);pl.position.copy(slot.group.position).add(new THREE.Vector3(0,0.3,0));scene.add(pl);}}
+  const s=worldToScreen(new THREE.Vector3(0,1.5,10));
+  floatAt(s.x,s.y,'供灯 +1','#ffd76a');
+  toast('🏮 灯灯相续，功德+1');
+});
+btnEls['btnCopy'].addEventListener('click',()=>{
+  showModal(`<h3>📜 抄经</h3><p>静心抄写，点字得功德 +0.5</p><div class="copy-grid" id="copyGrid"></div><div class="btns"><button class="btn-ghost" id="cc2">结束</button></div>`);
+  const chars='心经波罗蜜多时照见五蕴皆空度一切苦厄舍利子色不异空空不异色';
+  const grid=document.getElementById('copyGrid');
+  for(const ch of chars){
+    const b=document.createElement('button');b.textContent=ch;
+    b.onclick=()=>{if(b.disabled)return;b.disabled=true;playDong();addMerit(0.5);taskProgress('copy',1);};
+    grid.appendChild(b);
+  }
+  document.getElementById('cc2').onclick=closeModal;
+});
+
+/* ================= 木鱼/跪拜/上香 ================= */
+btnEls['btnMuyu'].addEventListener('click',()=>{playDong();addMerit(0.5);taskProgress('muyu',1);hammer.rotation.z=-0.9;setTimeout(()=>hammer.rotation.z=-0.4,150);muyuBody.scale.set(1.12,0.78,1.12);setTimeout(()=>muyuBody.scale.set(1,0.85,1),120);const s=worldToScreen(new THREE.Vector3(-6,1.2,18));floatAt(s.x,s.y,'功德 +0.5','#ffd76a');});
+btnEls['btnBow'].addEventListener('click',()=>{playChime();addMerit(2);halo.material.emissiveIntensity=2;setTimeout(()=>halo.material.emissiveIntensity=0.6,700);const s=worldToScreen(new THREE.Vector3(0,3,-5));floatAt(s.x,s.y,'诚心 +2','#ffe08a');toast('🙏 诚心叩拜，佛光普照');});
+btnEls['btnIncense'].addEventListener('click',()=>{
+  showModal(`<h3>🕯️ 上香祈福</h3><p>写下心愿，香烟替你传达…</p><textarea id="wi" placeholder="愿家人平安健康…"></textarea><div class="btns"><button class="btn-ghost" id="c">取消</button><button class="btn-primary" id="o">上香</button></div>`);
+  document.getElementById('c').onclick=closeModal;
+  document.getElementById('o').onclick=()=>{const w=document.getElementById('wi').value.trim();playChime();addMerit(1);taskProgress('incense',1);closeModal();toast(w?'🕯️ 心愿已随香烟上达':'🕯️ 上香完毕，功德+1');};
+});
+
+/* ================= NPC 对话 ================= */
+const NPC_PERSONA={
+  '解签僧·玄机':{style:'沉稳玄妙',prefix:'施主'},
+  '迎客僧·慧明':{style:'热情爽朗',prefix:'这位施主'},
+  '迎客僧·慧觉':{style:'温和',prefix:'施主'},
+  '扫地僧·苦行':{style:'寡言禅意',prefix:'…'},
+  '老僧·悟道':{style:'慈悲长者',prefix:'孩子'},
+  '打坐僧·禅心':{style:'安静内敛',prefix:'施主'},
+  '诵经僧·慧远':{style:'温和',prefix:'施主'},
+  '诵经僧·慧深':{style:'温和',prefix:'施主'},
+  '许愿僧·慧愿':{style:'温和鼓励',prefix:'善信'},
+  '知客僧·慧文':{style:'机敏善谈',prefix:'客人'},
+  '巡逻僧·慧巡':{style:'干练',prefix:'施主'},
+};
+function getPersonaReply(whoName,t){
+  const persona=NPC_PERSONA[whoName]||{style:'平和',prefix:'施主'};
+  let ctx='';
+  if(merit>=8000) ctx='施主修行已深，功德无量。';
+  else if(merit>=2000) ctx='施主功德渐厚，善根深厚。';
+  else if(merit>=500) ctx='施主已入门径，继续精进。';
+  else ctx='施主初入佛门，慢慢来。';
+  if(/签|卦|求/.test(t)) return persona.prefix+'，求签问卜可往西边求签房，玄机师兄六术皆通。';
+  if(/功德|等级|修行/.test(t)) return ctx;
+  if(/烦恼|累|压力/.test(t)) return persona.prefix+'，烦恼即菩提。'+(persona.style==='寡言禅意'?'…放下便是。':'说出来，心里就轻些了。');
+  if(/佛|禅|经/.test(t)) return persona.prefix+'，佛在灵山莫远求，灵山只在汝心头。';
+  if(/你好|hi|在吗/.test(t)) return persona.prefix+'好，小僧是'+whoName+'。今日可好？';
+  if(/愿|许愿/.test(t)) return persona.prefix+'，许愿需先行一善，可去许愿屋看看。';
+  return '';
+}
+const BOT_REPLIES=[
+  {k:['烦恼','累','压力','难受','难过'],r:'阿弥陀佛，烦恼即菩提。说出来，心里就轻些了。'},
+  {k:['钱','穷','工作','失业','工资'],r:'身外之物，来去有时。先把今日饭吃好、觉睡好。'},
+  {k:['爱','喜欢','分手','感情','单身'],r:'缘分如水，强求不得。善待自己，是对缘最好的准备。'},
+  {k:['考试','学习','成绩'],r:'功不唐捐。每天专注一小步，比焦虑一大片更有用。'},
+  {k:['保佑','祈福','平安'],r:'心诚则灵。愿你与家人皆平安。'},
+  {k:['你好','hi','在吗','hello'],r:'阿弥陀佛，施主好。今日可去求签房看看。'},
+  {k:['签','求签','卦','占卜'],r:'求签房在西边，找解签僧玄机，六术皆可问。'},
+  {k:['谢谢','感谢'],r:'不必言谢，善念已在心中种下。'},
+];
+const DEF=['嗯…小僧在听，多说一点？','阿弥陀佛，一切都会慢慢好起来。','心若安处，便是归处。','先深呼吸，再回头看看，也许没那么难。'];
+let chatHistory=[];
+btnEls['btnNPC'].addEventListener('click',()=>{
+  if(!nearNPC)return;
+  const who=nearNPC;
+  if(who.isDiviner){openDivineMenu();return;}
+  showModal(`<h3>💬 ${who.name}</h3><div class="chat-log" id="cl"></div><div class="chat-input-row"><input id="ci" placeholder="说说话…"/><button id="cs">发送</button></div><div class="btns"><button class="btn-ghost" id="cc">关闭</button></div>`);
+  const log=document.getElementById('cl');
+  chatHistory.forEach(m=>{const d=document.createElement('div');d.className='msg '+m.role;d.textContent=m.text;log.appendChild(d);});
+  if(chatHistory.length===0){const d=document.createElement('div');d.className='msg bot';d.textContent=`阿弥陀佛，施主可好？小僧是${who.name}。`;log.appendChild(d);}
+  const send=()=>{
+    const inp=document.getElementById('ci');const t=inp.value.trim();if(!t)return;
+    const d1=document.createElement('div');d1.className='msg me';d1.textContent=t;log.appendChild(d1);
+    chatHistory.push({role:'me',text:t});inp.value='';
+    setTimeout(()=>{
+      let r=getPersonaReply(who.name,t);
+      if(!r){r=DEF[Math.floor(Math.random()*DEF.length)];for(const p of BOT_REPLIES)if(p.k.some(k=>t.includes(k))){r=p.r;break;}}
+      const d2=document.createElement('div');d2.className='msg bot';d2.textContent=r;log.appendChild(d2);
+      chatHistory.push({role:'bot',text:r});log.scrollTop=log.scrollHeight;
+    },400);
+    log.scrollTop=log.scrollHeight;
+  };
+  document.getElementById('cs').onclick=send;
+  document.getElementById('ci').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+  document.getElementById('cc').onclick=closeModal;
+});
+
+/* ================= 小地图 ================= */
+const mapCanvas=document.getElementById('mapCanvas');const mapCtx=mapCanvas.getContext('2d');
+const MAP_SIZE=120;mapCanvas.width=MAP_SIZE*2;mapCanvas.height=MAP_SIZE*2;
+const MAP_HALF=32;
+const mapBuildings=[
+  {x:0,z:-2,w:16,d:12,color:'#c0392b'},
+  {x:0,z:32,w:8,d:3,color:'#7a5c3e'},
+  {x:-18,z:4,w:8,d:8,color:'#d99a3a'},
+  {x:16,z:8,w:8,d:8,color:'#4a9bd8'},
+  {x:0,z:-24,w:5,d:5,color:'#5a9e4a'},
+  {x:6,z:-24,w:6,d:6,color:'#c0392b'},
+  {x:-6,z:18,w:2,d:2,color:'#a8743e'},
+  {x:0,z:18,w:2,d:2,color:'#a8743e'},
+];
+function drawMap(){
+  if(minimapEl.classList.contains('hide'))return;
+  const W=mapCanvas.width,H=mapCanvas.height;
+  mapCtx.clearRect(0,0,W,H);
+  mapCtx.fillStyle='#e8d4b0';mapCtx.fillRect(0,0,W,H);
+  const toMap=(x,z)=>({x:W/2+(x/MAP_HALF)*(W/2-8),y:H/2+(z/MAP_HALF)*(H/2-8)});
+  for(const b of mapBuildings){const p=toMap(b.x,b.z);mapCtx.fillStyle=b.color;const bw=b.w/MAP_HALF*(W/2-8)*0.5;const bh=b.d/MAP_HALF*(H/2-8)*0.5;mapCtx.fillRect(p.x-bw/2,p.y-bh/2,bw,bh);}
+  const pp=toMap(state.pos.x,state.pos.z);
+  mapCtx.save();mapCtx.translate(pp.x,pp.y);mapCtx.rotate(-state.camYaw);
+  mapCtx.fillStyle='#c0392b';mapCtx.beginPath();mapCtx.moveTo(0,-10);mapCtx.lineTo(6,6);mapCtx.lineTo(0,2);mapCtx.lineTo(-6,6);mapCtx.closePath();mapCtx.fill();
+  mapCtx.strokeStyle='#fff';mapCtx.lineWidth=1.5;mapCtx.stroke();mapCtx.restore();
+}
+function currentZone(){
+  if(state.pos.z>28)return '山门';
+  if(state.pos.z>10)return '前院';
+  if(state.pos.z>-10&&Math.abs(state.pos.x)<9)return '大雄宝殿';
+  if(state.pos.x<-10)return '求签房';
+  if(state.pos.z<-14)return '后院';
+  return '庭院';
+}
+
+/* ================= 建筑透明 ================= */
+function updateBuildingsTransparency(){
+  for(const b of buildings){
+    const dx=Math.abs(state.pos.x-b.cx),dz=Math.abs(state.pos.z-b.cz);
+    const inside=dx<b.rx&&dz<b.rz;
+    if(inside!==b.transparent){
+      b.transparent=inside;
+      const opacity=inside?0.22:1;
+      for(const m of b.walls){m.material.transparent=inside;m.material.opacity=opacity;m.material.depthWrite=!inside;m.material.needsUpdate=true;}
+      for(const m of b.roofs){m.material.transparent=inside;m.material.opacity=opacity;m.material.depthWrite=!inside;m.material.needsUpdate=true;}
+    }
+  }
+}
+
+/* ================= 主循环 ================= */
+const clock=new THREE.Clock();
+let walkAccum=0;
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05);
+  const t=clock.elapsedTime;
+  let mx=0,mz=0;
+  if(joyActive){mx=joyX;mz=joyY;}
+  if(keys['KeyW'])mz-=1;if(keys['KeyS'])mz+=1;if(keys['KeyA'])mx-=1;if(keys['KeyD'])mx+=1;
+  const ml=Math.hypot(mx,mz);
+  if(ml>1){mx/=ml;mz/=ml;}
+  state.moving=ml>0.15;
+  const camF=new THREE.Vector3(-Math.sin(state.camYaw),0,-Math.cos(state.camYaw));
+  const camR=new THREE.Vector3(Math.cos(state.camYaw),0,-Math.sin(state.camYaw));
+  const mv=new THREE.Vector3().addScaledVector(camR,mx).addScaledVector(camF,-mz);
+  if(mv.lengthSq()>0.001){
+    mv.normalize();
+    const step=state.speed*dt;
+    state.pos.x+=mv.x*step;state.pos.z+=mv.z*step;
+    state.yaw=Math.atan2(mv.x,mv.z);
+    walkAccum+=step;
+    if(walkAccum>2){taskProgress('walk',Math.floor(walkAccum));walkAccum-=Math.floor(walkAccum);}
+  }
+  state.pos.x=Math.max(-25,Math.min(25,state.pos.x));
+  state.pos.z=Math.max(-29,Math.min(31,state.pos.z));
+  const pd=Math.hypot(state.pos.x-16,state.pos.z-8);
+  if(pd<4.3){const a=Math.atan2(state.pos.z-8,state.pos.x-16);state.pos.x=16+Math.cos(a)*4.3;state.pos.z=8+Math.sin(a)*4.3;}
+  const rects=[
+    {x1:-8,x2:8,z1:-8,z2:-7.6,pushZ:true},
+    {x1:-8.2,x2:-7.8,z1:-8,z2:4,pushX:true},
+    {x1:7.8,x2:8.2,z1:-8,z2:4,pushX:true},
+    {x1:-22,x2:-14,z1:0,z2:0.4,pushZ:true},
+    {x1:-22.2,x2:-21.8,z1:0,z2:8,pushX:true},
+    {x1:-14.2,x2:-13.8,z1:0,z2:8,pushX:true},
+  ];
+  for(const r of rects){
+    if(state.pos.x>r.x1&&state.pos.x<r.x2&&state.pos.z>r.z1&&state.pos.z<r.z2){
+      if(r.pushZ){const a=Math.abs(state.pos.z-r.z1),b=Math.abs(state.pos.z-r.z2);state.pos.z=a<b?r.z1-0.05:r.z2+0.05;}
+      if(r.pushX){const a=Math.abs(state.pos.x-r.x1),b=Math.abs(state.pos.x-r.x2);state.pos.x=a<b?r.x1-0.05:r.x2+0.05;}
+    }
+  }
+  player.position.set(state.pos.x,0,state.pos.z);
+  player.rotation.y=state.yaw;
+  if(state.moving){state.walkT+=dt*12;player.position.y=Math.abs(Math.sin(state.walkT))*0.09;player.rotation.z=Math.sin(state.walkT)*0.07;}
+  else{state.walkT=0;player.position.y=0;player.rotation.z=0;}
+  const camTarget=new THREE.Vector3(state.pos.x,1.4,state.pos.z);
+  const camOff=new THREE.Vector3(Math.sin(state.camYaw)*Math.cos(state.camPitch),Math.sin(state.camPitch),Math.cos(state.camYaw)*Math.cos(state.camPitch)).multiplyScalar(state.camDist);
+  camera.position.lerp(camTarget.clone().add(camOff),0.22);
+  camera.lookAt(camTarget);
+  for(const n of npcs){
+    if(n.walk){
+      n.walkT+=dt;
+      const k=(Math.sin(n.walkT*n.walk.speed*0.5)+1)/2;
+      const gx=n.walk.x1+(n.walk.x2-n.walk.x1)*k;
+      const gz=n.walk.z1+(n.walk.z2-n.walk.z1)*k;
+      const dir=new THREE.Vector3(n.walk.x2-n.walk.x1,0,n.walk.z2-n.walk.z1).normalize();
+      n.group.position.set(gx,0,gz);
+      n.group.rotation.y=Math.atan2(dir.x,dir.z);
+      n.pos.set(gx,0,gz);
+      n.group.position.y=Math.abs(Math.sin(n.walkT*8))*0.05;
+    }
+  }
+  for(let i=0;i<incenseLights.length;i++)incenseLights[i].intensity=0.22+Math.sin(t*6+i)*0.1+Math.random()*0.06;
+  for(const c of candles)c.scale.setScalar(1+Math.sin(t*8+Math.random())*0.1);
+  for(const l of lanterns)l.obj.rotation.z=Math.sin(t*1.2+l.phase)*0.07;
+  halo.rotation.z=t*0.4;
+  updateBuildingsTransparency();
+  updateInteraction();
+  drawMap();
+  document.getElementById('mapLabel').textContent=currentZone();
+  renderer.render(scene,camera);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+let lp=0;const loadBar=document.getElementById('loadBar');
+const lt=setInterval(()=>{lp+=12;loadBar.style.width=Math.min(lp,100)+'%';if(lp>=100){clearInterval(lt);setTimeout(()=>document.getElementById('loading').classList.add('hide'),300);}},120);
+updateRobe();
+animate();
+document.body.addEventListener('touchstart',()=>getCtx(),{once:true});
+</script>
+</body>
+</html>
